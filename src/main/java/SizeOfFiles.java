@@ -1,10 +1,9 @@
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 public class SizeOfFiles {
@@ -17,16 +16,15 @@ public class SizeOfFiles {
     private final List<String> fileNames = new ArrayList<>();
 
     public static void main(String[] args) {
-        String line = "[-h B] filename1.txt filename2.txt";
-        System.out.println(Arrays.stream(args).toList());
-        String[] ass = line.split(" ");
-        Path path = Paths.get("filename1.txt").toAbsolutePath();
-        SizeOfFiles abomination = new SizeOfFiles();
-        abomination.parse(args);
-        abomination.returnSizeOfFiles();
+        new SizeOfFiles().returnSizeOfFiles(args);
     }
 
-    public void returnSizeOfFiles() {
+    public void returnSizeOfFiles(String[] args) {
+        try {
+            parse(args);
+        } catch (IllegalArgumentException e) {
+            System.out.println("Unsupported unit of measure");
+        }
         try {
             if (isTotalSizeRequired) {
                 totalSize();
@@ -35,10 +33,13 @@ public class SizeOfFiles {
             }
         } catch (IllegalArgumentException e) {
             System.out.println("Can not find one of the files");
+        } catch (NullPointerException e) {
+            System.out.println("No filenames given");
         }
     }
 
-    private void totalSize() {
+    private void totalSize() throws NullPointerException {
+        if (fileNames.isEmpty()) throw new NullPointerException();
         long total = 0;
         for (String name : fileNames) total += fileSize(name);
         String inFormatTotal = toFormat(total);
@@ -46,51 +47,74 @@ public class SizeOfFiles {
     }
 
     private void eachSize() {
+        if (fileNames.isEmpty()) throw new NullPointerException();
+        List<String> sizes = new ArrayList<>();
         for (String name : fileNames) {
             long size = fileSize(name);
             String inFormatSize = toFormat(size);
-            System.out.println(inFormatSize);
+            sizes.add(inFormatSize);
         }
+        for (String str: sizes) System.out.println(str);
     }
 
-    private long fileSize(String fileName) {
+    private long fileSize(String fileName) throws IllegalArgumentException {
         Path path = Paths.get(fileName);
-        File file = new File(fileName);
+        File file = path.toFile();
         if (file.exists()) {
+            if (file.isDirectory()) {
+                return getDirectorySize(file);
+            }
             return file.length();
         } else {
             throw new IllegalArgumentException();
         }
     }
 
-    private String toFormat(long bytes) {
-        switch (unitOfMeasure) {
-            case "B" -> {
-                return (bytes + " B");
-            }
-            case "KB" -> {
-                long kiloBytes = (bytes / base);
-                return (kiloBytes + " KB");
-            }
-            case "GB" -> {
-                long gigaBytes = (long) (bytes / Math.pow(2, base));
-                return (gigaBytes + " GB");
-            }
-            default -> {
-                long defKiloBytes = (bytes / base);
-                return (defKiloBytes + "");
+    private long getDirectorySize(File dir) {
+        long size = 0;
+        if (dir.isFile()) {
+            size = dir.length();
+        } else {
+            File[] subFiles = dir.listFiles();
+            for (File file : subFiles) {
+                if (file.isFile()) {
+                    size += file.length();
+                } else {
+                    size += getDirectorySize(file);
+                }
             }
         }
+        return size;
     }
 
-    public void parse(String[] args) {
+    private String toFormat(long bytes) {
+
+        if (Objects.equals(unitOfMeasure, "B")) {
+            return (bytes + " B");
+        } else if (Objects.equals(unitOfMeasure, "KB")) {
+            long kiloBytes = (bytes / base);
+            return (kiloBytes + " KB");
+        } else if (Objects.equals(unitOfMeasure, "MB")) {
+            long megaBytes = (long) (bytes / Math.pow(2, base));
+            return (megaBytes + " MB");
+        } else if (Objects.equals(unitOfMeasure, "GB")) {
+            long gigaBytes = (long) (bytes / Math.pow(3, base));
+            return (gigaBytes + " GB");
+        } else {
+            long defKiloBytes = (bytes / base);
+            return (defKiloBytes + "");
+        }
+
+    }
+
+    private void parse(String[] args) throws IllegalArgumentException {
         setFlags(args);
         setFileNames(args);
-        System.out.println("isForHumanRead = " + isForHumanRead);
+        /*System.out.println("isForHumanRead = " + isForHumanRead);
         System.out.println("isTotalSizeRequired = " + isTotalSizeRequired);
         System.out.println("unitOfMeasure = " + unitOfMeasure);
         System.out.println("base = " + base);
-        System.out.println("fileNames = " + fileNames);
+        System.out.println("fileNames = " + fileNames);*/
     }
 
     private void setFileNames(String[] args) {
@@ -100,10 +124,12 @@ public class SizeOfFiles {
         }
     }
 
-    private void setFlags(String[] args) {
+    private void setFlags(String[] args) throws IllegalArgumentException {
         for (String arg : args) {
             setIsForHumanRead(arg);
-            if (isForHumanRead) setUnitOfMeasure(arg);
+            if (isForHumanRead && unitOfMeasure == null) {
+                setUnitOfMeasure(arg);
+            }
             setIsTotalSizeRequired(arg);
             setIsDifferentBaseRequired(arg);
         }
@@ -116,12 +142,12 @@ public class SizeOfFiles {
         }
     }
 
-    public void setUnitOfMeasure(String arg) {
-        Pattern patternForUnit = Pattern.compile("(\\w{1,2}])");
+    private void setUnitOfMeasure(String arg) throws IllegalArgumentException {
+        Pattern patternForUnit = Pattern.compile("(\\w{1,2})");
         if (patternForUnit.matcher(arg).matches()) {
-            String unit = arg.replace("]", "");
-            if (unit.equals("B") || unit.equals("KB") || unit.equals("MB") || unit.equals("GB"))
-                unitOfMeasure = unit;
+            if (arg.equals("B") || arg.equals("KB") || arg.equals("MB") || arg.equals("GB"))
+                unitOfMeasure = arg;
+            else throw new IllegalArgumentException();
         }
     }
 
