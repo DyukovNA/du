@@ -24,6 +24,7 @@ public class SizeOfFiles {
             parse(args);
         } catch (IllegalArgumentException e) {
             System.out.println("Unsupported unit of measure");
+            return;
         }
         try {
             if (isTotalSizeRequired) {
@@ -54,7 +55,11 @@ public class SizeOfFiles {
             String inFormatSize = toFormat(size);
             sizes.add(inFormatSize);
         }
-        for (String str: sizes) System.out.println(str);
+        StringBuilder output = new StringBuilder();
+        for (String str: sizes) {
+            output.append(str).append(" ");
+        }
+        System.out.println(output.toString().strip());
     }
 
     private long fileSize(String fileName) throws IllegalArgumentException {
@@ -133,6 +138,7 @@ public class SizeOfFiles {
             setIsTotalSizeRequired(arg);
             setIsDifferentBaseRequired(arg);
         }
+        if (isForHumanRead && unitOfMeasure == null) throw new IllegalArgumentException();
     }
 
     private void setIsForHumanRead(String input) {
