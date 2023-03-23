@@ -19,7 +19,7 @@ public class SizeOfFiles {
         new SizeOfFiles().returnSizeOfFiles(args);
     }
 
-    public void returnSizeOfFiles(String[] args) {
+    private void returnSizeOfFiles(String[] args) {
         try {
             parse(args);
         } catch (IllegalArgumentException e) {
