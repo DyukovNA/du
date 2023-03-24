@@ -4,28 +4,27 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Pattern;
+import org.kohsuke.args4j.*;
+import static java.lang.System.out;
 
 public class SizeOfFiles {
     private boolean isForHumanRead = false;
+    @Option(name = "-h")
     private String unitOfMeasure;
+    @Option(name = "-c")
     private boolean isTotalSizeRequired = false;
+    @Option(name = "--si")
     private boolean isDifferentBaseRequired = false;
     private int base = 1024;
-
-    private final List<String> fileNames = new ArrayList<>();
+    @Argument()
+    private List<String> fileNames = new ArrayList<>();
 
     public static void main(String[] args) {
         new SizeOfFiles().returnSizeOfFiles(args);
     }
 
     private void returnSizeOfFiles(String[] args) {
-        try {
-            parse(args);
-        } catch (IllegalArgumentException e) {
-            System.out.println("Unsupported unit of measure");
-            return;
-        }
+        parse(args);
         try {
             if (isTotalSizeRequired) {
                 totalSize();
@@ -33,9 +32,9 @@ public class SizeOfFiles {
                 eachSize();
             }
         } catch (IllegalArgumentException e) {
-            System.out.println("Can not find one of the files");
+            out.println("Can not find one of the files");
         } catch (NullPointerException e) {
-            System.out.println("No filenames given");
+            out.println("No filenames given");
         }
     }
 
@@ -43,23 +42,34 @@ public class SizeOfFiles {
         if (fileNames.isEmpty()) throw new NullPointerException();
         long total = 0;
         for (String name : fileNames) total += fileSize(name);
-        String inFormatTotal = toFormat(total);
-        System.out.println(inFormatTotal);
+        try {
+            String inFormatTotal = toFormat(total);
+            out.println(inFormatTotal);
+        } catch (Exception e) {
+            out.println("Unsupported unit of measure");
+        }
     }
 
-    private void eachSize() {
-        if (fileNames.isEmpty()) throw new NullPointerException();
+    private void eachSize() throws NullPointerException {
+        if (fileNames.isEmpty()) {
+            throw new NullPointerException();
+        }
         List<String> sizes = new ArrayList<>();
         for (String name : fileNames) {
             long size = fileSize(name);
-            String inFormatSize = toFormat(size);
-            sizes.add(inFormatSize);
+            try {
+                String inFormatSize = toFormat(size);
+                sizes.add(inFormatSize);
+            } catch (Exception e) {
+                out.println("Unsupported unit of measure");
+                return;
+            }
         }
         StringBuilder output = new StringBuilder();
-        for (String str: sizes) {
+        for (String str : sizes) {
             output.append(str).append(" ");
         }
-        System.out.println(output.toString().strip());
+        out.println(output.toString().strip());
     }
 
     private long fileSize(String fileName) throws IllegalArgumentException {
@@ -92,8 +102,7 @@ public class SizeOfFiles {
         return size;
     }
 
-    private String toFormat(long bytes) {
-
+    private String toFormat(long bytes) throws Exception {
         if (Objects.equals(unitOfMeasure, "B")) {
             return (bytes + " B");
         } else if (Objects.equals(unitOfMeasure, "KB")) {
@@ -105,70 +114,27 @@ public class SizeOfFiles {
         } else if (Objects.equals(unitOfMeasure, "GB")) {
             long gigaBytes = (long) (bytes / Math.pow(3, base));
             return (gigaBytes + " GB");
-        } else {
+        } else if (unitOfMeasure == null) {
             long defKiloBytes = (bytes / base);
             return (defKiloBytes + "");
-        }
-
+        } else throw new Exception("Unsupported unit of measure");
     }
 
-    private void parse(String[] args) throws IllegalArgumentException {
-        setFlags(args);
-        setFileNames(args);
+    private void parse(String[] args) {
+        CmdLineParser parser = new CmdLineParser(this);
+        try {
+            parser.parseArgument(args);
+        } catch (CmdLineException clEx) {
+            out.println("Unable to parse command-line options");
+            return;
+        }
+        if (isDifferentBaseRequired) base = 1000;
+        if (unitOfMeasure != null) isForHumanRead = true;
+
         /*System.out.println("isForHumanRead = " + isForHumanRead);
         System.out.println("isTotalSizeRequired = " + isTotalSizeRequired);
         System.out.println("unitOfMeasure = " + unitOfMeasure);
         System.out.println("base = " + base);
         System.out.println("fileNames = " + fileNames);*/
-    }
-
-    private void setFileNames(String[] args) {
-        Pattern patternIsFileName = Pattern.compile("\\w+.\\w+");
-        for (String arg : args) {
-            if (patternIsFileName.matcher(arg).matches()) fileNames.add(arg);
-        }
-    }
-
-    private void setFlags(String[] args) throws IllegalArgumentException {
-        for (String arg : args) {
-            setIsForHumanRead(arg);
-            if (isForHumanRead && unitOfMeasure == null) {
-                setUnitOfMeasure(arg);
-            }
-            setIsTotalSizeRequired(arg);
-            setIsDifferentBaseRequired(arg);
-        }
-        if (isForHumanRead && unitOfMeasure == null) throw new IllegalArgumentException();
-    }
-
-    private void setIsForHumanRead(String input) {
-        if (!isForHumanRead) {
-            Pattern patternForHumanRead = Pattern.compile("(-h)");
-            isForHumanRead = patternForHumanRead.matcher(input).find();
-        }
-    }
-
-    private void setUnitOfMeasure(String arg) throws IllegalArgumentException {
-        Pattern patternForUnit = Pattern.compile("(\\w{1,2})");
-        if (patternForUnit.matcher(arg).matches()) {
-            if (arg.equals("B") || arg.equals("KB") || arg.equals("MB") || arg.equals("GB"))
-                unitOfMeasure = arg;
-            else throw new IllegalArgumentException();
-        }
-    }
-
-    private void setIsTotalSizeRequired(String input) {
-        if (!isTotalSizeRequired) {
-            Pattern patternForTotalSize = Pattern.compile("(-c)");
-            isTotalSizeRequired = patternForTotalSize.matcher(input).find();
-        }
-    }
-
-    private void setIsDifferentBaseRequired(String input) {
-        if (!isDifferentBaseRequired) {
-            Pattern patternForDifferentBase = Pattern.compile("(--si)");
-            isDifferentBaseRequired = patternForDifferentBase.matcher(input).find();
-            if (isDifferentBaseRequired) base = 1000;
-        }
     }
 }
